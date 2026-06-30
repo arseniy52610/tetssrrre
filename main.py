@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, Header
+from fastapi import FastAPI, Depends, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import SQLModel, Session, select, create_engine, Field
 from pydantic import BaseModel
@@ -9,6 +9,7 @@ import hashlib
 import json
 from urllib.parse import parse_qs
 import uvicorn
+import os
 import asyncio
 
 from aiogram import Bot, Dispatcher, types
@@ -16,13 +17,23 @@ from aiogram.filters import Command
 from aiogram.types import WebAppInfo, InlineKeyboardMarkup, InlineKeyboardButton
 
 # ==================== КОНФИГ ====================
-BOT_TOKEN = "8735697736:AAFZ52Ed0V5RZ3mwC4LqbRLFpQLY4oHJgUU"  # <-- ТВОЙ ТОКЕН
-DB_PATH = "botdelixor.db"
+# Берём токен из переменных окружения bothost
+BOT_TOKEN = os.getenv('BOT_TOKEN')
+if not BOT_TOKEN:
+    raise Exception("BOT_TOKEN не найден в переменных окружения!")
 
-# URL Mini App на GitHub Pages (замени после деплоя!)
-WEBAPP_URL = "https://arseniy52610.github.io/DelixorMiniApp/"
+DB_PATH = "/app/data/botdelixor.db"  # bothost рекомендует хранить в /app/data
+
+# Порт из переменной окружения (bothost использует 3000)
+PORT = int(os.getenv('PORT', 3000))
+
+# URL Mini App (замени после деплоя на GitHub Pages)
+WEBAPP_URL = "https://arseniy52610.github.io/delixor/"
 
 # ==================== БАЗА ДАННЫХ ====================
+# Создаём папку для данных если её нет
+os.makedirs('/app/data', exist_ok=True)
+
 class ChatMessage(SQLModel, table=True):
     __tablename__ = "chatmessage"
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -309,12 +320,15 @@ def get_delpn():
 
 # ==================== ЗАПУСК ====================
 async def start_bot():
-    print("Запуск бота...")
+    """Запуск бота в режиме polling"""
+    print("Запуск бота в режиме polling...")
+    await bot.delete_webhook()  # Удаляем webhook если был
     await dp.start_polling(bot)
 
 async def start_server():
-    print("Запуск API сервера...")
-    config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="info")
+    """Запуск FastAPI сервера"""
+    print(f"Запуск API сервера на порту {PORT}...")
+    config = uvicorn.Config(app, host="0.0.0.0", port=PORT, log_level="info")
     server = uvicorn.Server(config)
     await server.serve()
 
@@ -323,7 +337,11 @@ async def main():
     print("DelixorMod Bot + API")
     print("=" * 50)
     print(f"Mini App URL: {WEBAPP_URL}")
+    print(f"Порт: {PORT}")
+    print(f"База данных: {DB_PATH}")
     print("=" * 50)
+    
+    # Запускаем бот и сервер параллельно
     await asyncio.gather(start_bot(), start_server())
 
 if __name__ == "__main__":
